@@ -367,8 +367,8 @@ struct ProjectAttributeButton: View {
                             .padding(.horizontal)
                             .padding(.top)
                         
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
+                        ScrollView {
+                            FlowLayout(spacing: 10) {
                                 ForEach(viewModel.uniqueProjectAttributes, id: \.self) { attribute in
                                     attributeQuickSelectButton(attribute)
                                 }
@@ -874,4 +874,55 @@ struct ArchiveView: View {
     }
     
 
+}
+
+// FlowLayout - 用于自动换行的布局容器
+struct FlowLayout: Layout {
+    var spacing: CGFloat
+    
+    init(spacing: CGFloat = 10) {
+        self.spacing = spacing
+    }
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let containerWidth = proposal.width ?? 0
+        
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var position = CGPoint.zero
+        var height: CGFloat = 0
+        
+        for (index, size) in sizes.enumerated() {
+            // 检查是否需要换行
+            if index > 0 && position.x + size.width > containerWidth {
+                position.x = 0
+                position.y += sizes[0...index-1].map { $0.height }.max()! + spacing
+            }
+            
+            position.x += size.width + (index < sizes.count - 1 ? spacing : 0)
+            height = max(height, position.y + size.height)
+        }
+        
+        return CGSize(width: containerWidth, height: height)
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var position = CGPoint(x: bounds.minX, y: bounds.minY)
+        var rowHeight: CGFloat = 0
+        
+        for (index, subview) in subviews.enumerated() {
+            let size = sizes[index]
+            
+            // 检查是否需要换行
+            if index > 0 && position.x + size.width > bounds.maxX {
+                position.x = bounds.minX
+                position.y += rowHeight + spacing
+                rowHeight = 0
+            }
+            
+            rowHeight = max(rowHeight, size.height)
+            subview.place(at: position, proposal: .unspecified)
+            position.x += size.width + spacing
+        }
+    }
 }
