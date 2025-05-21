@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="#3399ff" />
+  
+  <!-- 卡片背景 -->
+  <rect x="204.8" y="204.8" width="614.4" height="614.4" rx="102.4" fill="white" />
+  
+  <!-- 待办项1（已完成） -->
+  <circle cx="256" cy="358" r="40" fill="#3399ff" />
+  <line x1="328" y1="358" x2="768" y2="358" stroke="#3399ff" stroke-width="25" />
+  
+  <!-- 待办项2 -->
+  <circle cx="256" cy="512" r="40" fill="#999999" />
+  <line x1="328" y1="512" x2="768" y2="512" stroke="#999999" stroke-width="25" />
+  
+  <!-- 待办项3 -->
+  <circle cx="256" cy="666" r="40" fill="#999999" />
+  <line x1="328" y1="666" x2="768" y2="666" stroke="#999999" stroke-width="25" />
+</svg> 

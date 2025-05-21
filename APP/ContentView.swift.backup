@@ -1,0 +1,577 @@
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject private var viewModel = TodoListViewModel()
+    @State private var selectedTab = 0  // 0: 待办事项，1: 历史归档
+    
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            TodoListView(viewModel: viewModel)
+                .tabItem {
+                    Label("待办事项", systemImage: "checkmark.circle")
+                }
+                .tag(0)
+            
+            ArchiveView(viewModel: viewModel)
+                .tabItem {
+                    Label("历史归档", systemImage: "archivebox")
+                }
+                .tag(1)
+        }
+    }
+}
+
+struct TodoListView: View {
+    @ObservedObject var viewModel: TodoListViewModel
+    @State private var newItemTitle = ""
+    @State private var isAddingNewItem = false
+    @State private var draggingItem: TodoItem?
+    
+    var body: some View {
+        NavigationView {
+            List {
+                if isAddingNewItem {
+                    HStack {
+                        Image(systemName: "circle")
+                            .foregroundColor(.gray)
+                        
+                        TextField("新待办事项", text: $newItemTitle)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                if !newItemTitle.isEmpty {
+                                    viewModel.addItem(title: newItemTitle)
+                                    newItemTitle = ""
+                                }
+                                isAddingNewItem = false
+                            }
+                            .onAppear {
+                                // 自动获取焦点
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    UIApplication.shared.sendAction(#selector(UIResponder.becomeFirstResponder), to: nil, from: nil, for: nil)
+                                }
+                            }
+                    }
+                    .padding(.vertical, 8)
+                }
+                
+                if #available(iOS 15.0, *) {
+                    ForEach(viewModel.items) { item in
+                        TodoItemRow(item: item, 
+                                   onToggle: viewModel.toggleItem, 
+                                   onSetReminder: viewModel.setReminder, 
+                                   onCancelReminder: viewModel.cancelReminder,
+                                   onUpdateTitle: viewModel.updateItemTitle)
+                        .draggable(item.id.uuidString) {
+                            // 拖动时显示的预览
+                            Text(item.title)
+                                .padding(10)
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                    }
+                    .onMove { from, to in
+                        viewModel.moveItem(from: from, to: to)
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            viewModel.deleteItem(viewModel.items[index])
+                        }
+                    }
+                } else {
+                    // iOS 15以下兼容方案
+                    ForEach(viewModel.items) { item in
+                        TodoItemRow(item: item, 
+                                   onToggle: viewModel.toggleItem, 
+                                   onSetReminder: viewModel.setReminder, 
+                                   onCancelReminder: viewModel.cancelReminder,
+                                   onUpdateTitle: viewModel.updateItemTitle)
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            viewModel.deleteItem(viewModel.items[index])
+                        }
+                    }
+                }
+                
+                if viewModel.items.isEmpty {
+                    Text("暂无待办事项")
+                        .foregroundColor(.gray)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                }
+            }
+            .navigationTitle("待办事项")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    EditButton()
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isAddingNewItem = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            #if swift(>=5.9) // iOS 17 and above
+            .onChange(of: isAddingNewItem) { oldValue, newValue in
+                if !newValue && newItemTitle.isEmpty {
+                    // 如果退出了添加模式且没有输入内容，清空字段
+                    newItemTitle = ""
+                }
+            }
+            #else
+            .onChange(of: isAddingNewItem) { newValue in
+                if !newValue && newItemTitle.isEmpty {
+                    // 如果退出了添加模式且没有输入内容，清空字段
+                    newItemTitle = ""
+                }
+            }
+            #endif
+        }
+    }
+}
+
+struct ArchiveView: View {
+    @ObservedObject var viewModel: TodoListViewModel
+    @State private var showingClearAlert = false
+    @State private var cachedGroups: [DateGroup: [TodoItem]] = [:]
+    
+    var body: some View {
+        NavigationView {
+            List {
+                if viewModel.archivedItems.isEmpty {
+                    Text("暂无归档项目")
+                        .foregroundColor(.gray)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                } else {
+                    // 按日期分组
+                    ForEach(getGroupKeys(), id: \.self) { dateKey in
+                        Section(header: getSectionHeader(for: dateKey)) {
+                            ForEach(cachedGroups[dateKey] ?? []) { item in
+                                ArchivedItemRow(item: item)
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            viewModel.restoreFromArchive(item)
+                                        } label: {
+                                            Label("恢复", systemImage: "arrow.counterclockwise")
+                                        }
+                                        .tint(.blue)
+                                    }
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) {
+                                            viewModel.deleteArchivedItem(item)
+                                        } label: {
+                                            Label("删除", systemImage: "trash")
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("历史归档")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if !viewModel.archivedItems.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showingClearAlert = true
+                        } label: {
+                            Text("清空")
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+            .alert("确认清空", isPresented: $showingClearAlert) {
+                Button("取消", role: .cancel) { }
+                Button("清空", role: .destructive) {
+                    viewModel.clearArchive()
+                }
+            } message: {
+                Text("此操作将删除所有归档的待办事项，且不可恢复")
+            }
+            .onAppear {
+                updateGroupedItems()
+            }
+            #if swift(>=5.9) // iOS 17 and above
+            .onChange(of: viewModel.archivedItems) { _, _ in
+                updateGroupedItems()
+            }
+            #else
+            .onChange(of: viewModel.archivedItems) { _ in
+                updateGroupedItems()
+            }
+            #endif
+        }
+    }
+    
+    // 获取已排序的组键
+    private func getGroupKeys() -> [DateGroup] {
+        return cachedGroups.keys.sorted(by: >)
+    }
+    
+    // 更新缓存的分组项目
+    private func updateGroupedItems() {
+        cachedGroups = groupItems(viewModel.archivedItems)
+    }
+    
+    // 分组项目的核心逻辑
+    private func groupItems(_ items: [TodoItem]) -> [DateGroup: [TodoItem]] {
+        var groups: [DateGroup: [TodoItem]] = [:]
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // 预先计算当前周的起始日期（仅计算一次）
+        let weekday = calendar.component(.weekday, from: now)
+        let daysToSubtract = (weekday + 5) % 7 // 将日期调整到本周一
+        guard let currentWeekStart = calendar.date(byAdding: .day, value: -daysToSubtract, to: calendar.startOfDay(for: now)) else {
+            return groups
+        }
+        
+        // 预处理所有日期计算，避免在循环中重复计算
+        var dateCache: [String: (startOfDay: Date, weekStart: Date, weekEnd: Date, isCurrentWeek: Bool)] = [:]
+        
+        // 第一步：按日期分组处理每个项目
+        for item in items {
+            guard let completedDate = item.completedAt else { continue }
+            
+            // 创建缓存键
+            let cacheKey = "\(Int(completedDate.timeIntervalSince1970 / 86400))" // 按天缓存
+            
+            // 如果缓存中没有，则计算日期值
+            if dateCache[cacheKey] == nil {
+                let startOfDay = calendar.startOfDay(for: completedDate)
+                
+                // 计算项目所在周的周一日期
+                let itemWeekday = calendar.component(.weekday, from: completedDate)
+                let daysToSubtract = (itemWeekday + 5) % 7
+                guard let weekStart = calendar.date(byAdding: .day, value: -daysToSubtract, to: startOfDay) else { continue }
+                guard let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) else { continue }
+                
+                // 检查是否在当前周
+                let isCurrentWeek = calendar.isDate(weekStart, equalTo: currentWeekStart, toGranularity: .day)
+                
+                // 保存到缓存
+                dateCache[cacheKey] = (startOfDay, weekStart, weekEnd, isCurrentWeek)
+            }
+            
+            // 从缓存获取计算结果
+            guard let dateInfo = dateCache[cacheKey] else { continue }
+            
+            // 根据是否为当前周决定分组方式
+            if dateInfo.isCurrentWeek {
+                // 按天分组
+                let dayGroup = DateGroup.day(dateInfo.startOfDay)
+                groups[dayGroup, default: []].append(item)
+            } else {
+                // 按周分组
+                let weekGroup = DateGroup.week(dateInfo.weekStart, dateInfo.weekEnd)
+                groups[weekGroup, default: []].append(item)
+            }
+        }
+        
+        return groups
+    }
+    
+    // 为每个分组创建标题
+    private func getSectionHeader(for dateGroup: DateGroup) -> Text {
+        let dateFormatter = DateFormatter()
+        
+        switch dateGroup {
+        case .day(let date):
+            // 本周内按照日期显示
+            let calendar = Calendar.current
+            let weekday = calendar.component(.weekday, from: date)
+            let weekdayName = getWeekdayName(weekday)
+            
+            dateFormatter.dateFormat = "MM月dd日"
+            let dateString = dateFormatter.string(from: date)
+            
+            return Text("\(weekdayName) \(dateString)")
+                .font(.headline)
+        
+        case .week(let startDate, let endDate):
+            // 其他周显示起止日期
+            dateFormatter.dateFormat = "MM月dd日"
+            let startString = dateFormatter.string(from: startDate)
+            let endString = dateFormatter.string(from: endDate)
+            
+            return Text("\(startString) - \(endString)")
+                .font(.headline)
+        }
+    }
+    
+    // 获取星期几的名称
+    private func getWeekdayName(_ weekday: Int) -> String {
+        let weekdays = ["", "周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        return weekdays[weekday]
+    }
+}
+
+// 用于归档项目分组的日期类型
+enum DateGroup: Hashable, Comparable {
+    case day(Date)    // 当天日期
+    case week(Date, Date)  // 一周的起止日期
+    
+    // 日期值提取辅助方法
+    private var primaryDate: Date {
+        switch self {
+        case .day(let date): return date
+        case .week(let start, _): return start
+        }
+    }
+    
+    // 简化的哈希实现
+    func hash(into hasher: inout Hasher) {
+        // 使用枚举case标识符和主日期
+        hasher.combine(typeOrdinal)
+        hasher.combine(primaryDate.timeIntervalSince1970)
+    }
+    
+    // 类型标识用于比较和哈希
+    private var typeOrdinal: Int {
+        switch self {
+        case .day: return 1
+        case .week: return 0
+        }
+    }
+    
+    // 实现Comparable协议的基本方法
+    static func < (lhs: DateGroup, rhs: DateGroup) -> Bool {
+        // 首先按日期比较
+        let lDate = lhs.primaryDate
+        let rDate = rhs.primaryDate
+        
+        if lDate != rDate {
+            return lDate < rDate
+        }
+        
+        // 日期相同时，按类型排序 (日期优先于周)
+        return lhs.typeOrdinal < rhs.typeOrdinal
+    }
+    
+    // 覆盖现有的相等性实现
+    static func == (lhs: DateGroup, rhs: DateGroup) -> Bool {
+        switch (lhs, rhs) {
+        case (.day(let lhsDate), .day(let rhsDate)):
+            return Calendar.current.isDate(lhsDate, inSameDayAs: rhsDate)
+        case (.week(let lhsStart, _), .week(let rhsStart, _)):
+            return Calendar.current.isDate(lhsStart, inSameDayAs: rhsStart)
+        default:
+            return false
+        }
+    }
+}
+
+struct ArchivedItemRow: View {
+    let item: TodoItem
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.title)
+                .strikethrough(true)
+                .foregroundColor(.gray)
+            
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                
+                if let completedAt = item.completedAt {
+                    Text("完成于: \(formatDate(completedAt))")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+struct TodoItemRow: View {
+    let item: TodoItem
+    let onToggle: (TodoItem) -> Void
+    let onSetReminder: (TodoItem, Date) -> Void
+    let onCancelReminder: (TodoItem) -> Void
+    let onUpdateTitle: (TodoItem, String) -> Void
+    
+    @State private var showingDatePicker = false
+    @State private var selectedDate = Date()
+    @State private var isEditing = false
+    @State private var editedTitle = ""
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                // 完成按钮区域
+                Button(action: { 
+                    onToggle(item) 
+                }) {
+                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(item.isCompleted ? Color("SecondaryAccentColor") : .gray)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(BorderlessButtonStyle()) // 防止按钮点击区域扩展
+                
+                // 标题文本或编辑字段
+                if isEditing {
+                    TextField("待办事项", text: $editedTitle)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            if !editedTitle.isEmpty {
+                                onUpdateTitle(item, editedTitle)
+                            }
+                            isEditing = false
+                        }
+                        .onAppear {
+                            // 自动获取焦点
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                UIApplication.shared.sendAction(#selector(UIResponder.becomeFirstResponder), to: nil, from: nil, for: nil)
+                            }
+                        }
+                } else {
+                    Text(item.title)
+                        .strikethrough(item.isCompleted)
+                        .foregroundColor(item.isCompleted ? .gray : .primary)
+                        .onTapGesture(count: 2) {
+                            if !item.isCompleted { // 只允许编辑未完成的项目
+                                editedTitle = item.title
+                                isEditing = true
+                            }
+                        }
+                }
+                
+                Spacer()
+                
+                // 如果已完成，显示完成时间
+                if item.isCompleted, let completedAt = item.completedAt {
+                    Text(timeAgoSinceCompletion(completedAt))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.trailing, 4)
+                }
+                
+                // 提醒按钮区域
+                if !item.isCompleted {
+                    Button(action: {
+                        if item.hasNotification {
+                            onCancelReminder(item)
+                        } else {
+                            selectedDate = Date().addingTimeInterval(3600) // 默认1小时后
+                            showingDatePicker = true
+                        }
+                    }) {
+                        Image(systemName: item.hasNotification ? "bell.fill" : "bell")
+                            .foregroundColor(item.hasNotification ? Color.accentColor : .gray)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(BorderlessButtonStyle()) // 防止按钮点击区域扩展
+                    .padding(.leading, 8) // 增加与标题的间距
+                }
+            }
+            
+            // 提醒信息区域
+            if item.hasNotification, let reminderDate = item.reminderDate {
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .foregroundColor(Color.accentColor)
+                        .font(.caption)
+                    
+                    Text("提醒: \(formatDate(reminderDate))")
+                        .font(.caption)
+                        .foregroundColor(Color.accentColor)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .sheet(isPresented: $showingDatePicker) {
+            ReminderPickerView(selectedDate: $selectedDate, isPresented: $showingDatePicker, onSave: {
+                onSetReminder(item, selectedDate)
+            })
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private func timeAgoSinceCompletion(_ date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+        
+        // 24小时 = 86400秒
+        let hoursRemaining = (24 * 60 * 60 - timeInterval) / 3600
+        
+        if hoursRemaining <= 0 {
+            return "即将归档"
+        } else if hoursRemaining < 1 {
+            return "不到1小时后归档"
+        } else {
+            return "约\(Int(hoursRemaining))小时后归档"
+        }
+    }
+}
+
+struct ReminderPickerView: View {
+    @Binding var selectedDate: Date
+    @Binding var isPresented: Bool
+    let onSave: () -> Void
+    
+    var body: some View {
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                datePickerContent
+            }
+        } else {
+            NavigationView {
+                datePickerContent
+            }
+        }
+    }
+    
+    var datePickerContent: some View {
+        VStack {
+            DatePicker(
+                "选择提醒时间",
+                selection: $selectedDate,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(WheelDatePickerStyle())
+            .labelsHidden()
+            .padding()
+        }
+        .navigationTitle("设置提醒")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("取消") {
+                    isPresented = false
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("保存") {
+                    onSave()
+                    isPresented = false
+                }
+            }
+        }
+    }
+}

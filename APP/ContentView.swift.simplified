@@ -1,0 +1,110 @@
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject private var viewModel = TodoListViewModel()
+    @State private var selectedTab = 0  // 0: 待办事项，1: 历史归档
+    
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            TodoListView(viewModel: viewModel)
+                .tabItem {
+                    Label("待办事项", systemImage: "checkmark.circle")
+                }
+                .tag(0)
+            
+            ArchiveView(viewModel: viewModel)
+                .tabItem {
+                    Label("历史归档", systemImage: "archivebox")
+                }
+                .tag(1)
+        }
+    }
+}
+
+// 临时简化的TodoListView，仅显示基本内容
+struct TodoListView: View {
+    @ObservedObject var viewModel: TodoListViewModel
+    @State private var newItemTitle = ""
+    @State private var isAddingNewItem = false
+    
+    var body: some View {
+        NavigationView {
+            List {
+                // 简化的项目列表
+                ForEach(viewModel.items) { item in
+                    SimpleTodoItemRow(item: item)
+                }
+                
+                if viewModel.items.isEmpty {
+                    Text("暂无待办事项")
+                        .foregroundColor(.gray)
+                }
+            }
+            .navigationTitle("待办事项")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isAddingNewItem = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 简化版TodoItemRow
+struct SimpleTodoItemRow: View {
+    let item: TodoItem
+    
+    var body: some View {
+        HStack {
+            Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+            Text(item.title)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// 极度简化的归档视图，移除所有复杂类型推断
+struct ArchiveView: View {
+    @ObservedObject var viewModel: TodoListViewModel
+    
+    var body: some View {
+        NavigationView {
+            List {
+                // 简化的归档显示
+                ForEach(viewModel.archivedItems) { item in
+                    VStack(alignment: .leading) {
+                        Text(item.title)
+                            .strikethrough(true)
+                        
+                        if let date = item.completedAt {
+                            Text("完成于: \(formattedDate(date))")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                
+                if viewModel.archivedItems.isEmpty {
+                    Text("暂无归档项目")
+                        .foregroundColor(.gray)
+                }
+            }
+            .navigationTitle("历史归档")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+    
+    // 简单的日期格式化函数
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+} 

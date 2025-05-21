@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		797504C72DD5F7DB0008D2BA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 797504C62DD5F7DB0008D2BA /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		79952A2C2DD4F2C900AE0118 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,25 +28,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		797504C62DD5F7DB0008D2BA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		79952A1C2DD4F2C800AE0118 /* MyTodo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyTodo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79952A2B2DD4F2C900AE0118 /* MyTodoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyTodoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		79952A352DD4F2C900AE0118 /* MyTodoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MyTodoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		79952A1E2DD4F2C800AE0118 /* MyTodo */ = {
+		797504C12DD5F6CC0008D2BA /* APP */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MyTodo;
-			sourceTree = "<group>";
-		};
-		79952A2E2DD4F2C900AE0118 /* MyTodoTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MyTodoTests;
-			sourceTree = "<group>";
-		};
-		79952A382DD4F2C900AE0118 /* MyTodoUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MyTodoUITests;
+			path = APP;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +70,8 @@
 		79952A132DD4F2C800AE0118 = {
 			isa = PBXGroup;
 			children = (
-				79952A1E2DD4F2C800AE0118 /* MyTodo */,
-				79952A2E2DD4F2C900AE0118 /* MyTodoTests */,
-				79952A382DD4F2C900AE0118 /* MyTodoUITests */,
+				797504C62DD5F7DB0008D2BA /* Assets.xcassets */,
+				797504C12DD5F6CC0008D2BA /* APP */,
 				79952A1D2DD4F2C800AE0118 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -108,7 +102,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				79952A1E2DD4F2C800AE0118 /* MyTodo */,
+				797504C12DD5F6CC0008D2BA /* APP */,
 			);
 			name = MyTodo;
 			packageProductDependencies = (
@@ -130,9 +124,6 @@
 			dependencies = (
 				79952A2D2DD4F2C900AE0118 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				79952A2E2DD4F2C900AE0118 /* MyTodoTests */,
-			);
 			name = MyTodoTests;
 			packageProductDependencies = (
 			);
@@ -152,9 +143,6 @@
 			);
 			dependencies = (
 				79952A372DD4F2C900AE0118 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				79952A382DD4F2C900AE0118 /* MyTodoUITests */,
 			);
 			name = MyTodoUITests;
 			packageProductDependencies = (
@@ -212,6 +200,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				797504C72DD5F7DB0008D2BA /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,6 +310,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "需要始终访问您的位置以便在您到家或离家时提醒您";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "需要始终访问您的位置以便在您到家或离家时提醒您";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要您的位置来设置待办事项提醒";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -329,6 +321,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				UIBackgroundModes = location;
 			};
 			name = Debug;
 		};
@@ -378,12 +371,16 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "需要始终访问您的位置以便在您到家或离家时提醒您";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "需要始终访问您的位置以便在您到家或离家时提醒您";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要您的位置来设置待办事项提醒";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				UIBackgroundModes = location;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -395,6 +392,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5LR6J3LC76;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -402,6 +400,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -422,6 +421,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5LR6J3LC76;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -429,6 +429,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
