@@ -267,6 +267,32 @@ class TodoListViewModel: ObservableObject {
         }
     }
     
+    // 删除项目属性并清空所有相关项目的属性
+    func deleteProjectAttribute(_ attribute: String) {
+        // 清空所有使用该属性的项目的属性
+        for index in items.indices {
+            if items[index].projectAttribute == attribute {
+                items[index].projectAttribute = nil
+                items[index].generatesNewTask = false
+            }
+        }
+        
+        // 清空归档项目中使用该属性的项目的属性
+        for index in archivedItems.indices {
+            if archivedItems[index].projectAttribute == attribute {
+                archivedItems[index].projectAttribute = nil
+                archivedItems[index].generatesNewTask = false
+            }
+        }
+        
+        // 保存更改
+        saveItems()
+        saveArchivedItems()
+        
+        // 重新分组归档项目
+        groupArchivedItems()
+    }
+    
     func updateItemTitle(_ item: TodoItem, _ newTitle: String) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             // 更新标题

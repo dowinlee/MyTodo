@@ -18,9 +18,8 @@ struct ContentView: View {
                 }
                 .tag(1)
         }
-        .onChange(of: selectedTab) { newTab in
-            // 当切换到归档标签时，刷新归档组
-            if newTab == 1 {
+        .onChange(of: selectedTab) {
+            if selectedTab == 1 {
                 viewModel.refreshArchivedGroups()
             }
         }
@@ -38,6 +37,11 @@ struct TodoListView: View {
     @State var selectedReminderDate = Date().addingTimeInterval(3600) // 默认1小时后
     @State var showingDeleteAlert = false
     @State var itemToDelete: TodoItem?
+    
+    // 新增项目时的属性设置
+    @State var newItemReminderDate: Date? = nil
+    @State var newItemProjectAttribute: String? = nil
+    @State var newItemGeneratesNewTask: Bool = false
     
     var body: some View {
         NavigationView {
@@ -68,7 +72,9 @@ struct TodoListView: View {
                 }
             }
             .onAppear(perform: setupListeners)
-            .onChange(of: viewModel.sortMethod, perform: handleSortMethodChange)
+            .onChange(of: viewModel.sortMethod) {
+                handleSortMethodChange(viewModel.sortMethod)
+            }
             .sheet(isPresented: $showReminderPicker) {
                 newTaskReminderPickerView
             }
@@ -92,26 +98,113 @@ struct TodoListView: View {
             .navigationTitle("待办事项")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
+            .environmentObject(viewModel)
         }
     }
     
     // 输入新待办项的行
     var newItemInputRow: some View {
-        HStack {
-            Image(systemName: "circle")
-                .foregroundColor(.gray)
-            
-            TextField("新待办事项", text: $newItemTitle)
-                .submitLabel(.done)
-                .onSubmit {
-                    if !newItemTitle.isEmpty {
-                        viewModel.addItem(title: newItemTitle)
-                        newItemTitle = ""
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "circle")
+                    .foregroundColor(.gray)
+                
+                TextField("新待办事项", text: $newItemTitle)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        if !newItemTitle.isEmpty {
+                            addNewItemWithAttributes()
+                        }
                     }
-                    isAddingNewItem = false
+                
+                Spacer()
+                
+                // 提醒按钮
+                NewItemReminderButton(
+                    onSetReminder: { date in
+                        newItemReminderDate = date
+                    }
+                )
+                
+                // 项目属性按钮
+                NewItemProjectButton(
+                    onSetProjectAttribute: { attribute, generatesNew in
+                        newItemProjectAttribute = attribute
+                        newItemGeneratesNewTask = generatesNew
+                    }
+                )
+            }
+            
+            // 显示已设置的提醒和项目属性
+            if let reminderDate = newItemReminderDate {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .foregroundColor(.accentColor)
+                        .font(.caption2)
+                    
+                    Text("提醒: \(formatDate(reminderDate))")
+                        .font(.caption2)
+                        .foregroundColor(.accentColor)
                 }
+            }
+            
+            // 显示已设置的项目属性
+            if let projectAttribute = newItemProjectAttribute {
+                HStack(spacing: 4) {
+                    Image(systemName: "tag.fill")
+                        .foregroundColor(.accentColor)
+                        .font(.caption2)
+                    
+                    Text("项目: \(projectAttribute)")
+                        .font(.caption2)
+                        .foregroundColor(.accentColor)
+                    
+                    if newItemGeneratesNewTask {
+                        Text("(续)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
+    }
+    
+    // 添加带属性的新项目
+    private func addNewItemWithAttributes() {
+        // 创建新项目，直接包含提醒和项目属性
+        let newItem = TodoItem(
+            title: newItemTitle,
+            reminderDate: newItemReminderDate,
+            projectAttribute: newItemProjectAttribute,
+            generatesNewTask: newItemGeneratesNewTask
+        )
+        
+        // 直接添加到列表开头
+        viewModel.items.insert(newItem, at: 0)
+        
+        // 如果有提醒，设置通知
+        if let reminderDate = newItemReminderDate {
+            viewModel.setReminder(for: newItem, at: reminderDate)
+        }
+        
+        // 重新排序并保存（通过调用现有的公共方法）
+        viewModel.changeSortMethod(to: viewModel.sortMethod)
+        
+        // 重置状态
+        newItemTitle = ""
+        isAddingNewItem = false
+        newItemReminderDate = nil
+        newItemProjectAttribute = nil
+        newItemGeneratesNewTask = false
+    }
+    
+    // 格式化日期
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
     
     // 空列表提示视图

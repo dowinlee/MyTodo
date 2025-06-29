@@ -1,4 +1,35 @@
 import SwiftUI
+import UserNotifications
+
+// 拖拽删除确认区组件
+struct DragDeleteZone: View {
+    let isActive: Bool
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // 删除图标
+            Image(systemName: "trash.circle.fill")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(isActive ? .white : .white.opacity(0.7))
+            
+            // 删除文字
+            Text("拖拽到此处删除")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(isActive ? .white : .white.opacity(0.7))
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 60)
+        .background(
+            Rectangle()
+                .fill(isActive ? Color.red : Color.red.opacity(0.4))
+                .shadow(color: isActive ? .red.opacity(0.3) : .clear, radius: 4, x: 0, y: 2)
+        )
+        .animation(.easeInOut(duration: 0.2), value: isActive)
+    }
+}
 
 // TodoListView的辅助视图和方法
 extension TodoListView {
@@ -101,12 +132,13 @@ extension TodoListView {
     
     // 基础行视图
     func simpleTodoRow(_ item: TodoItem) -> some View {
-        HStack {
+        HStack(spacing: 4) {
             Button(action: { 
                 viewModel.toggleItem(item) 
             }) {
                 Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(item.isCompleted ? .green : .gray)
+                    .font(.system(size: 16))
             }
             .buttonStyle(BorderlessButtonStyle())
             
@@ -119,7 +151,7 @@ extension TodoListView {
             
             if item.isCompleted, let completedAt = item.completedAt {
                 Text(formatRelativeTime(completedAt))
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.gray)
             }
             
@@ -142,7 +174,7 @@ extension TodoListView {
                 .environmentObject(viewModel)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .contentShape(Rectangle()) // 确保整行都可点击
     }
     
@@ -169,7 +201,7 @@ struct ReminderButton: View {
     var body: some View {
         Image(systemName: item.hasNotification ? "bell.fill" : "bell")
             .foregroundColor(item.hasNotification ? .accentColor : .gray)
-            .frame(width: 24, height: 24)
+            .frame(width: 20, height: 20)
             .contentShape(Rectangle())
             // 单击打开设置界面
             .onTapGesture {
@@ -182,7 +214,7 @@ struct ReminderButton: View {
                     onCancelReminder()
                 }
             }
-            .padding(.leading, 8)
+            .padding(.leading, 4)
             .sheet(isPresented: $showingDatePicker) {
                 reminderPickerView
             }
@@ -302,6 +334,11 @@ struct ProjectAttributeButton: View {
     @State var showingProjectAttributeSheet = false
     @State var projectAttribute = ""
     @State var generatesNewTask = false
+    @State var showingDeleteAlert = false
+    @State var attributeToDelete = ""
+    @State var showingDragDeleteZone = false
+    @State var draggedAttribute: String?
+    @State var isDragging = false
     // 添加获取已有项目属性的环境对象
     @EnvironmentObject var viewModel: TodoListViewModel
     
@@ -319,11 +356,11 @@ struct ProjectAttributeButton: View {
         }) {
             Image(systemName: item.projectAttribute != nil ? "tag.fill" : "tag")
                 .foregroundColor(item.projectAttribute != nil ? .accentColor : .gray)
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
         .buttonStyle(BorderlessButtonStyle())
-        .padding(.leading, 8)
+        .padding(.leading, 4)
         .sheet(isPresented: $showingProjectAttributeSheet) {
             projectAttributePickerView
         }
@@ -331,55 +368,57 @@ struct ProjectAttributeButton: View {
     
     var projectAttributePickerView: some View {
         NavigationView {
-            VStack {
-                Form {
-                    Section(header: Text("项目属性")) {
-                        TextField("输入项目属性", text: $projectAttribute)
-                    }
-                    
-                    Section {
-                        Toggle("完成后生成新任务", isOn: $generatesNewTask)
-                    }
-                    
-                    // 添加删除项目属性的选项
-                    if item.projectAttribute != nil {
+            ZStack(alignment: .bottom) {
+                VStack {
+                    Form {
+                        Section(header: Text("项目属性")) {
+                            TextField("输入项目属性", text: $projectAttribute)
+                        }
                         Section {
-                            Button(action: {
-                                onRemoveProjectAttribute()
-                                showingProjectAttributeSheet = false
-                            }) {
-                                HStack {
-                                    Image(systemName: "tag.slash")
-                                    Text("移除项目属性")
+                            Toggle("完成后生成新任务", isOn: $generatesNewTask)
+                        }
+                        if item.projectAttribute != nil {
+                            Section {
+                                Button(action: {
+                                    onRemoveProjectAttribute()
+                                    showingProjectAttributeSheet = false
+                                }) {
+                                    HStack {
+                                        Image(systemName: "tag.slash")
+                                        Text("移除项目属性")
+                                    }
+                                    .foregroundColor(.red)
                                 }
-                                .foregroundColor(.red)
                             }
                         }
                     }
-                }
-                
-                // 已有项目属性的快速选择部分
-                if !viewModel.uniqueProjectAttributes.isEmpty {
-                    VStack(alignment: .leading) {
-                        Text("快速选择")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                            .padding(.horizontal)
-                            .padding(.top)
-                        
-                        ScrollView {
-                            FlowLayout(spacing: 10) {
-                                ForEach(viewModel.uniqueProjectAttributes, id: \.self) { attribute in
-                                    attributeQuickSelectButton(attribute)
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding(.bottom)
+                    if !viewModel.uniqueProjectAttributes.isEmpty {
+                        quickSelectionView
                     }
                 }
+                .padding(.bottom, isDragging ? 100 : 80)
+
+                DragDeleteZone(isActive: isDragging) { }
+                .onDrop(of: ["public.text"], delegate: ProjectAttributeDropDelegate(
+                    draggedAttribute: $draggedAttribute,
+                    isDragging: $isDragging,
+                    showingDragDeleteZone: $showingDragDeleteZone,
+                    onDelete: {
+                        print("onDelete called")
+                        if let draggedAttribute = draggedAttribute {
+                            attributeToDelete = draggedAttribute
+                            showingDeleteAlert = true
+                        }
+                        showingDragDeleteZone = false
+                        isDragging = false
+                        draggedAttribute = nil
+                    }
+                ))
+                .frame(height: 80)
+                .ignoresSafeArea(edges: .bottom)
             }
             .navigationTitle(item.projectAttribute != nil ? "编辑项目属性" : "设置项目属性")
+            .animation(.easeInOut(duration: 0.3), value: isDragging)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
@@ -396,11 +435,52 @@ struct ProjectAttributeButton: View {
                     .disabled(projectAttribute.isEmpty)
                 }
             }
+            .alert("确认删除项目属性", isPresented: $showingDeleteAlert) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) {
+                    viewModel.deleteProjectAttribute(attributeToDelete)
+                }
+            } message: {
+                Text("删除项目属性\"\(attributeToDelete)\"后，所有使用该属性的项目的属性将被清空，但项目本身不会被删除。")
+            }
         }
     }
     
-    // 项目属性快速选择按钮
-    func attributeQuickSelectButton(_ attribute: String) -> some View {
+    // 快速选择视图
+    var quickSelectionView: some View {
+        VStack(alignment: .leading) {
+            Text("快速选择")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .padding(.horizontal)
+                .padding(.top)
+            
+            FlowLayout(spacing: 10) {
+                ForEach(viewModel.uniqueProjectAttributes, id: \.self) { attribute in
+                    quickSelectButton(attribute)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .onDrop(of: ["public.text"], delegate: ProjectAttributeDropDelegate(
+            draggedAttribute: $draggedAttribute,
+            isDragging: $isDragging,
+            showingDragDeleteZone: $showingDragDeleteZone,
+            onDelete: {
+                print("onDelete called")
+                if let draggedAttribute = draggedAttribute {
+                    attributeToDelete = draggedAttribute
+                    showingDeleteAlert = true
+                }
+                showingDragDeleteZone = false
+                isDragging = false
+                draggedAttribute = nil
+            }
+        ))
+    }
+    
+    // 快速选择按钮
+    func quickSelectButton(_ attribute: String) -> some View {
         Button(action: {
             projectAttribute = attribute
         }) {
@@ -413,6 +493,56 @@ struct ProjectAttributeButton: View {
                 .cornerRadius(10)
         }
         .buttonStyle(BorderlessButtonStyle())
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                attributeToDelete = attribute
+                showingDeleteAlert = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .onDrag {
+            // 开始拖拽时设置拖拽的属性并激活删除区域
+            draggedAttribute = attribute
+            isDragging = true
+            return NSItemProvider(object: attribute as NSString)
+        }
+    }
+}
+
+// 项目属性拖拽代理
+struct ProjectAttributeDropDelegate: SwiftUI.DropDelegate {
+    @Binding var draggedAttribute: String?
+    @Binding var isDragging: Bool
+    @Binding var showingDragDeleteZone: Bool
+    let onDelete: () -> Void
+    
+    func dropEntered(info: DropInfo) {
+        // 进入拖拽区域时激活删除区域
+        isDragging = true
+    }
+    
+    func dropExited(info: DropInfo) {
+        // 离开拖拽区域时取消激活删除区域
+        isDragging = false
+    }
+    
+    func performDrop(info: DropInfo) -> Bool {
+        print("performDrop called") // 调试用
+        isDragging = false
+        onDelete()
+        draggedAttribute = nil
+        return true
+    }
+    
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        // 提供拖拽建议
+        return DropProposal(operation: .move)
+    }
+    
+    func validateDrop(info: DropInfo) -> Bool {
+        // 验证拖拽是否有效
+        return true
     }
 }
 
@@ -425,7 +555,7 @@ struct ItemTitleView: View {
     @State var editedTitle = ""
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             // 标题部分
             if isEditing {
                 TextField("待办事项", text: $editedTitle)
@@ -454,36 +584,41 @@ struct ItemTitleView: View {
                     }
             }
             
-            // 提醒信息部分
-            if item.hasNotification, let reminderDate = item.reminderDate {
-                HStack {
-                    Image(systemName: "clock.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.caption)
-                    
-                    Text("提醒: \(formatDate(reminderDate))")
-                        .font(.caption)
-                        .foregroundColor(.accentColor)
-                }
-            }
-            
-            // 项目属性部分
-            if let projectAttribute = item.projectAttribute {
-                HStack {
-                    Image(systemName: "tag.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.caption)
-                    
-                    Text("项目: \(projectAttribute)")
-                        .font(.caption)
-                        .foregroundColor(.accentColor)
-                    
-                    if item.generatesNewTask {
-                        Image(systemName: "arrow.triangle.2.circlepath")
+            // 提醒信息和项目属性合并显示在一行
+            HStack(spacing: 8) {
+                // 提醒信息部分
+                if item.hasNotification, let reminderDate = item.reminderDate {
+                    HStack(spacing: 2) {
+                        Image(systemName: "clock.fill")
                             .foregroundColor(.accentColor)
-                            .font(.caption)
+                            .font(.caption2)
+                        
+                        Text(formatDate(reminderDate))
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
                     }
                 }
+                
+                // 项目属性部分
+                if let projectAttribute = item.projectAttribute {
+                    HStack(spacing: 2) {
+                        Image(systemName: "tag.fill")
+                            .foregroundColor(.accentColor)
+                            .font(.caption2)
+                        
+                        Text(projectAttribute)
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                        
+                        if item.generatesNewTask {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.accentColor)
+                                .font(.caption2)
+                        }
+                    }
+                }
+                
+                Spacer()
             }
         }
     }
@@ -759,7 +894,7 @@ struct ArchiveView: View {
     
     // 简化的归档项目行
     func archivedItemRow(_ item: TodoItem) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(item.title)
                 .strikethrough(true)
                 .foregroundColor(.gray)
@@ -789,12 +924,12 @@ struct ArchiveView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
     
     // 回收站项目行
     func trashItemRow(_ item: TodoItem) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(item.title)
                 .strikethrough(true)
                 .foregroundColor(.gray)
@@ -818,7 +953,7 @@ struct ArchiveView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
     
     // 计算并格式化剩余天数
@@ -923,6 +1058,294 @@ struct FlowLayout: Layout {
             rowHeight = max(rowHeight, size.height)
             subview.place(at: position, proposal: .unspecified)
             position.x += size.width + spacing
+        }
+    }
+}
+
+// 新增项目时的提醒按钮
+struct NewItemReminderButton: View {
+    let onSetReminder: (Date) -> Void
+    
+    @State private var showingDatePicker = false
+    @State private var selectedDate = Date().addingTimeInterval(3600) // 默认1小时后
+    @State private var hasReminder = false
+    
+    var body: some View {
+        Button(action: {
+            showingDatePicker = true
+        }) {
+            Image(systemName: hasReminder ? "bell.fill" : "bell")
+                .foregroundColor(hasReminder ? .accentColor : .gray)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(BorderlessButtonStyle())
+        .sheet(isPresented: $showingDatePicker) {
+            newItemReminderPickerView
+        }
+    }
+    
+    var newItemReminderPickerView: some View {
+        NavigationView {
+            VStack(spacing: 16) {
+                // 日期时间选择器
+                DatePicker(
+                    "选择提醒时间",
+                    selection: $selectedDate,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .datePickerStyle(WheelDatePickerStyle())
+                .labelsHidden()
+                .padding()
+                
+                // 快捷选择按钮
+                Text("快速设置")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                
+                // 分钟快捷选择
+                HStack(spacing: 20) {
+                    quickSetButton(minutes: 5)
+                    quickSetButton(minutes: 15)
+                    quickSetButton(minutes: 30)
+                }
+                .padding(.horizontal)
+                
+                // 日期快捷选择
+                HStack(spacing: 20) {
+                    dateQuickSetButton(title: "明天", daysToAdd: 1)
+                    dateQuickSetButton(title: "后天", daysToAdd: 2)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 20)
+                
+                Spacer()
+            }
+            .navigationTitle("设置提醒")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        showingDatePicker = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        hasReminder = true
+                        onSetReminder(selectedDate)
+                        showingDatePicker = false
+                    }
+                }
+            }
+        }
+    }
+    
+    // 快速设置按钮（分钟）
+    func quickSetButton(minutes: Int) -> some View {
+        Button(action: {
+            let newDate = Date().addingTimeInterval(Double(minutes * 60))
+            hasReminder = true
+            onSetReminder(newDate)
+            showingDatePicker = false
+        }) {
+            VStack {
+                Text("\(minutes)")
+                    .font(.headline)
+                Text("分钟")
+                    .font(.caption)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.accentColor.opacity(0.1))
+            .cornerRadius(10)
+        }
+        .buttonStyle(BorderlessButtonStyle())
+    }
+    
+    // 快速设置按钮（日期）
+    func dateQuickSetButton(title: String, daysToAdd: Int) -> some View {
+        Button(action: {
+            var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+            dateComponents.day! += daysToAdd
+            dateComponents.hour = 9
+            dateComponents.minute = 0
+            
+            if let newDate = Calendar.current.date(from: dateComponents) {
+                hasReminder = true
+                onSetReminder(newDate)
+                showingDatePicker = false
+            }
+        }) {
+            VStack {
+                Text(title)
+                    .font(.headline)
+                Text("9:00")
+                    .font(.caption)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.accentColor.opacity(0.1))
+            .cornerRadius(10)
+        }
+        .buttonStyle(BorderlessButtonStyle())
+    }
+}
+
+// 新增项目时的项目属性按钮
+struct NewItemProjectButton: View {
+    let onSetProjectAttribute: (String, Bool) -> Void
+    
+    @State private var showingProjectAttributeSheet = false
+    @State private var projectAttribute = ""
+    @State private var generatesNewTask = false
+    @State private var hasProjectAttribute = false
+    @State private var showingDeleteAlert = false
+    @State private var attributeToDelete = ""
+    @State private var showingDragDeleteZone = false
+    @State private var draggedAttribute: String?
+    @State private var isDragging = false
+    @EnvironmentObject var viewModel: TodoListViewModel
+    
+    var body: some View {
+        Button(action: {
+            showingProjectAttributeSheet = true
+        }) {
+            Image(systemName: hasProjectAttribute ? "tag.fill" : "tag")
+                .foregroundColor(hasProjectAttribute ? .accentColor : .gray)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(BorderlessButtonStyle())
+        .sheet(isPresented: $showingProjectAttributeSheet) {
+            newItemProjectAttributePickerView
+        }
+    }
+    
+    var newItemProjectAttributePickerView: some View {
+        NavigationView {
+            ZStack(alignment: .bottom) {
+                VStack {
+                    Form {
+                        Section(header: Text("项目属性")) {
+                            TextField("输入项目属性", text: $projectAttribute)
+                        }
+                        Section {
+                            Toggle("完成后生成新任务", isOn: $generatesNewTask)
+                        }
+                    }
+                    if !viewModel.uniqueProjectAttributes.isEmpty {
+                        quickSelectionView
+                    }
+                }
+                .padding(.bottom, isDragging ? 100 : 80)
+
+                DragDeleteZone(isActive: isDragging) { }
+                .onDrop(of: ["public.text"], delegate: ProjectAttributeDropDelegate(
+                    draggedAttribute: $draggedAttribute,
+                    isDragging: $isDragging,
+                    showingDragDeleteZone: $showingDragDeleteZone,
+                    onDelete: {
+                        print("onDelete called")
+                        if let draggedAttribute = draggedAttribute {
+                            attributeToDelete = draggedAttribute
+                            showingDeleteAlert = true
+                        }
+                        showingDragDeleteZone = false
+                        isDragging = false
+                        draggedAttribute = nil
+                    }
+                ))
+                .frame(height: 80)
+                .ignoresSafeArea(edges: .bottom)
+            }
+            .navigationTitle("设置项目属性")
+            .animation(.easeInOut(duration: 0.3), value: isDragging)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        showingProjectAttributeSheet = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        if !projectAttribute.isEmpty {
+                            hasProjectAttribute = true
+                            onSetProjectAttribute(projectAttribute, generatesNewTask)
+                        }
+                        showingProjectAttributeSheet = false
+                    }
+                }
+            }
+            .alert("确认删除项目属性", isPresented: $showingDeleteAlert) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) {
+                    viewModel.deleteProjectAttribute(attributeToDelete)
+                }
+            } message: {
+                Text("删除项目属性\"\(attributeToDelete)\"后，所有使用该属性的项目的属性将被清空，但项目本身不会被删除。")
+            }
+        }
+    }
+    
+    // 快速选择视图
+    var quickSelectionView: some View {
+        VStack(alignment: .leading) {
+            Text("快速选择")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .padding(.horizontal)
+                .padding(.top)
+            
+            FlowLayout(spacing: 10) {
+                ForEach(viewModel.uniqueProjectAttributes, id: \.self) { attribute in
+                    quickSelectButton(attribute)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .onDrop(of: ["public.text"], delegate: ProjectAttributeDropDelegate(
+            draggedAttribute: $draggedAttribute,
+            isDragging: $isDragging,
+            showingDragDeleteZone: $showingDragDeleteZone,
+            onDelete: {
+                print("onDelete called")
+                if let draggedAttribute = draggedAttribute {
+                    attributeToDelete = draggedAttribute
+                    showingDeleteAlert = true
+                }
+                showingDragDeleteZone = false
+                isDragging = false
+                draggedAttribute = nil
+            }
+        ))
+    }
+    
+    // 快速选择按钮
+    func quickSelectButton(_ attribute: String) -> some View {
+        Button(action: {
+            projectAttribute = attribute
+        }) {
+            Text(attribute)
+                .font(.system(size: 14))
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(projectAttribute == attribute ? Color.accentColor : Color.accentColor.opacity(0.1))
+                .foregroundColor(projectAttribute == attribute ? .white : .accentColor)
+                .cornerRadius(10)
+        }
+        .buttonStyle(BorderlessButtonStyle())
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                attributeToDelete = attribute
+                showingDeleteAlert = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .onDrag {
+            // 开始拖拽时设置拖拽的属性并激活删除区域
+            draggedAttribute = attribute
+            isDragging = true
+            return NSItemProvider(object: attribute as NSString)
         }
     }
 }
